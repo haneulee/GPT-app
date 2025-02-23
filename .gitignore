@@ -3,3 +3,6 @@ env/
 
 files/
 .cache/
+.DS_Store
+falcon.bin
+__pycache__
