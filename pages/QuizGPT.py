@@ -7,7 +7,7 @@ from langchain.prompts import ChatPromptTemplate
 from langchain.callbacks import StreamingStdOutCallbackHandler
 import streamlit as st
 from langchain.retrievers import WikipediaRetriever
-from langchain.schema import BaseOutputParser, output_parser
+from langchain.schema import BaseOutputParser, output_parser, Document
 
 
 class JsonOutputParser(BaseOutputParser):
@@ -25,7 +25,14 @@ st.set_page_config(
 
 st.title("QuizGPT")
 
+openai_api_key = st.sidebar.text_input("Enter your OpenAI API Key", type="password")
+
+if not openai_api_key:
+    st.warning("Please enter your OpenAI API key to proceed.")
+    st.stop()
+
 llm = ChatOpenAI(
+    openai_api_key=openai_api_key,
     temperature=0.1,
     model="gpt-3.5-turbo-1106",
     streaming=True,
@@ -34,7 +41,17 @@ llm = ChatOpenAI(
 
 
 def format_docs(docs):
-    return "\n\n".join(document.page_content for document in docs)
+    if isinstance(docs, str):
+        return docs  # Directly return if already a string
+    elif isinstance(docs, list) and all(isinstance(doc, Document) for doc in docs):
+        return "\n\n".join(doc.page_content for doc in docs)
+    elif isinstance(docs, list):  # Handle unexpected list elements
+        return "\n\n".join(str(doc) for doc in docs)
+    else:
+        raise ValueError(f"Invalid document format: {type(docs)}. Expected list of Documents or string.")
+
+
+difficulty = st.sidebar.selectbox("Select Quiz Difficulty", ("Easy", "Medium", "Hard"))
 
 
 questions_prompt = ChatPromptTemplate.from_messages(
@@ -45,6 +62,8 @@ questions_prompt = ChatPromptTemplate.from_messages(
     You are a helpful assistant that is role playing as a teacher.
          
     Based ONLY on the following context make 10 (TEN) questions minimum to test the user's knowledge about the text.
+
+    Adjust difficulty: {difficulty}.
     
     Each question should have 4 answers, three of them must be incorrect and one should be correct.
          
@@ -72,7 +91,11 @@ questions_prompt = ChatPromptTemplate.from_messages(
     ]
 )
 
-questions_chain = {"context": format_docs} | questions_prompt | llm
+questions_chain = {
+    "context": format_docs,
+    "difficulty": lambda _: difficulty  # Ensure difficulty is injected at runtime
+} | questions_prompt | llm
+
 
 formatting_prompt = ChatPromptTemplate.from_messages(
     [
@@ -201,13 +224,13 @@ formatting_prompt = ChatPromptTemplate.from_messages(
 
 formatting_chain = formatting_prompt | llm
 
-
 @st.cache_data(show_spinner="Loading file...")
 def split_file(file):
-    file_content = file.read()
+    file_content = file.read().decode("utf-8")  # Ensure it's a decoded string
     file_path = f"./.cache/quiz_files/{file.name}"
-    with open(file_path, "wb") as f:
+    with open(file_path, "w", encoding="utf-8") as f:
         f.write(file_content)
+
     splitter = CharacterTextSplitter.from_tiktoken_encoder(
         separator="\n",
         chunk_size=600,
@@ -215,20 +238,43 @@ def split_file(file):
     )
     loader = UnstructuredFileLoader(file_path)
     docs = loader.load_and_split(text_splitter=splitter)
-    return docs
+
+    if isinstance(docs, list) and all(isinstance(doc, Document) for doc in docs):
+        return docs  # ✅ Already correct
+    elif isinstance(docs, list):
+        return [Document(page_content=str(doc)) for doc in docs]  # Convert to Document objects
+    elif isinstance(docs, str):
+        return [Document(page_content=docs)]  # Convert single string to Document object
+    else:
+        raise ValueError("split_file() returned an unsupported type.")
+
+
 
 
 @st.cache_data(show_spinner="Making quiz...")
-def run_quiz_chain(_docs, topic):
-    chain = {"context": questions_chain} | formatting_chain | output_parser
-    return chain.invoke(_docs)
+def run_quiz_chain(_docs, difficulty):
+    chain = {
+        "context": questions_chain,
+        "difficulty": lambda _: difficulty  # Ensure it's dynamically evaluated
+    } | formatting_chain | output_parser
+    return chain.invoke({"context": _docs, "difficulty": difficulty})
+
+
 
 
 @st.cache_data(show_spinner="Searching Wikipedia...")
 def wiki_search(term):
     retriever = WikipediaRetriever(top_k_results=5)
     docs = retriever.get_relevant_documents(term)
-    return docs
+
+    if isinstance(docs, list) and all(isinstance(doc, Document) for doc in docs):
+        return docs  # ✅ Correct format
+    elif isinstance(docs, list):
+        return [Document(page_content=str(doc)) for doc in docs]  # Convert list of strings
+    elif isinstance(docs, str):
+        return [Document(page_content=docs)]  # Convert single string to Document
+    else:
+        raise ValueError("wiki_search() returned an unsupported type.")
 
 
 with st.sidebar:
@@ -264,7 +310,13 @@ if not docs:
     """
     )
 else:
-    response = run_quiz_chain(docs, topic if topic else file.name)
+    if not docs:
+        st.error("No valid documents found. Please upload a file or search Wikipedia.")
+    else:
+        response = run_quiz_chain(docs, difficulty)
+    score = 0
+    max_score = len(response["questions"])
+
     with st.form("questions_form"):
         st.write(response)
         for question in response["questions"]:
@@ -276,6 +328,16 @@ else:
             )
             if {"answer": value, "correct": True} in question["answers"]:
                 st.success("Correct!")
+                score += 1
             elif value is not None:
                 st.error("Wrong!")
-        button = st.form_submit_button()
+        submit_button = st.form_submit_button()
+    
+    if submit_button:
+        st.write(f"Your score: {score}/{max_score}")
+        if score == max_score:
+            st.balloons()
+            st.success("Congratulations! You got a perfect score!")
+        else:
+            if st.button("Retry Quiz"):
+                st.experimental_rerun()
