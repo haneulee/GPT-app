@@ -134,7 +134,7 @@ with st.sidebar:
     st.markdown("---")
     level = st.selectbox("Quiz Level", ("EASY", "HRAD"))
     st.markdown("---")
-    st.write("Github: https://github.com/fullstack-gpt-python/assignment-16")
+    st.write("Github: https://github.com/haneulee/GPT-app/blob/main/pages/QuizGPT.py")
 
 if not docs:
     st.markdown(

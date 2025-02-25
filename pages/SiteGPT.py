@@ -212,7 +212,7 @@ with st.sidebar:
         disabled=True,
     )
     st.markdown("---")
-    st.write("Github: https://github.com/fullstack-gpt-python/assignment-17")
+    st.write("Github: https://github.com/haneulee/GPT-app/blob/main/pages/SiteGPT.py")
 
 if url:
     if ".xml" not in url:
