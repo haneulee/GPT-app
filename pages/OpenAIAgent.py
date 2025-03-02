@@ -13,15 +13,15 @@ ASSISTANT_NAME = "Research Assistant"
 st.set_page_config(page_title="Research Assistant", layout="wide")
 st.sidebar.title("Settings")
 
-client = OpenAI(
-    organization="org-l3stFe2ffnZM5sk17fbK0qKC",
-    project="proj_X6ZoFeBCA6Dd4LssFgCguz8x",
-)
-
 # 사용자 OpenAI API 키 입력
 api_key = st.sidebar.text_input("Enter your OpenAI API Key", type="password")
 if api_key:
-    client.beta.api_key = api_key
+    # client.beta.api_key = api_key
+    client = OpenAI(
+        organization="org-l3stFe2ffnZM5sk17fbK0qKC",
+        project="proj_X6ZoFeBCA6Dd4LssFgCguz8x",
+        api_key=api_key,
+    )
 else:
     st.warning("Please enter your OpenAI API key to use the assistant.")
     st.stop()
