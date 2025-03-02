@@ -178,13 +178,13 @@ else:
                 value = st.radio(
                     "Select an option.",
                     [answer["answer"] for answer in question["answers"]],
-                    index=None,
+                    index=0,
                 )
 
                 if {"answer": value, "correct": True} in question["answers"]:
                     st.success("Correct!")
                     success_count += 1
-                elif value is not None:
+                elif value is not 0:
                     st.error("Wrong!")
             if question_count == success_count:
                 st.balloons()

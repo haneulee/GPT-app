@@ -115,7 +115,7 @@ def parse_page(soup: BeautifulSoup):
     return str(soup.get_text()).replace("\n", "")
 
 
-@st.cache_data(show_spinner="Loading Website...")
+@st.cache_resource(show_spinner="Loading Website...")
 def load_website(url):
     splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
         chunk_size=1000, chunk_overlap=200
